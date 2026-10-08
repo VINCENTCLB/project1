@@ -20,8 +20,9 @@ def cross_entropy(y, pred, eps=1e-15):
     Returns:
         float: Cross-entropy loss
     """
+    N = y.shape[0]
     pred = np.clip(pred, eps, 1 - eps)
-    return - np.mean((y.T @ np.log(pred)) + ((np.ones(y.shape)-y).T @ np.log(np.ones(pred.shape) - pred)))
+    return - ((y.T @ np.log(pred)) + ((np.ones(y.shape)-y).T @ np.log(np.ones(pred.shape) - pred)))/ N
 
 def cross_entropy_grad(y, tx, pred):
     """Compute the gradient of the cross-entropy loss.
@@ -51,11 +52,10 @@ def logistic_regression(y, tx, initial_w, max_iters, gamma):
         loss (float): Final loss
     """
     w = initial_w
-    loss = 0
     for i in range(max_iters):
         pred = sigmoid(tx @ w)
-        loss = cross_entropy(y, pred)
         w = w - gamma * cross_entropy_grad(y, tx, pred)
+    loss = cross_entropy(y, sigmoid(tx @ w))
     return w, loss
 
 def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
@@ -74,9 +74,9 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
         loss (float): Final loss
     """
     w = initial_w
-    loss = 0
     for i in range(max_iters):
         pred = sigmoid(tx @ w)
-        loss = cross_entropy(y, pred) + lambda_ * np.sum(w**2)
         w = w - gamma * (cross_entropy_grad(y, tx, pred) + 2 * lambda_ * w)
+        
+    loss = cross_entropy(y, sigmoid(tx @ w))
     return w, loss
