@@ -1,6 +1,30 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+
+def plot_validation_results(trials, output_path):
+    """Save development F1 versus ridge lambda for each preprocessing method."""
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for method in sorted({trial["preprocessing"] for trial in trials}):
+        selected = sorted(
+            (trial for trial in trials if trial["preprocessing"] == method),
+            key=lambda trial: trial["lambda"],
+        )
+        ax.plot(
+            [trial["lambda"] for trial in selected],
+            [trial["development"]["f1"] for trial in selected],
+            marker="o", label=method,
+        )
+    ax.set_xscale("log")
+    ax.set_xlabel("Ridge lambda")
+    ax.set_ylabel("Development positive-class F1")
+    ax.set_title("Model selection on the development split")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=160)
+    plt.close(fig)
+
 def plot_feature_distribution(feature_values, feature_name):
     """
     Plots the distribution of a single feature.
@@ -130,4 +154,3 @@ def plot_loss_curve(losses):
     plt.title('Loss Curve')
     plt.legend()
     plt.show()
-    
