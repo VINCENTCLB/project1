@@ -17,8 +17,7 @@ def plot_feature_distribution(feature_values, feature_name):
     plt.show()
     
 
-def plot_statistics(
-mean, std, min_val, max_val, median_val, feature_names, log_scale=False):
+def plot_statistics(mean, std, min_val, max_val, median_val, feature_names, log_scale=False):
     """Plots summary statistics as clean range intervals (Min-Max, Mean ± Std,
 
     Median).
@@ -34,7 +33,6 @@ mean, std, min_val, max_val, median_val, feature_names, log_scale=False):
 
     fig, ax = plt.subplots(figsize=(10, max(5, num_features * 0.6)))
 
-    # 1. Intervalle total [Min, Max] (Ligne fine)
     ax.hlines(
         y_indices,
         min_val,
@@ -45,7 +43,6 @@ mean, std, min_val, max_val, median_val, feature_names, log_scale=False):
         label="Range [Min, Max]",
     )
 
-    # 2. Intervalle [Mean - Std, Mean + Std] (Ligne epaisse)
     ax.hlines(
         y_indices,
         mean - std,
@@ -56,7 +53,7 @@ mean, std, min_val, max_val, median_val, feature_names, log_scale=False):
         label="Mean ± Std",
     )
 
-    # 3. Points pour la Moyenne et la Médiane
+ 
     ax.plot(
         mean,
         y_indices,
