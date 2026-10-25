@@ -8,7 +8,8 @@ def sigmoid(x):
     Returns:
         np.array: Sigmoid of the input array
     """
-    return 1/(1+ np.exp(-x))
+    return 1 / (1 + np.exp(-x))
+
 
 def cross_entropy(y, pred, eps=1e-15):
     """Compute the cross-entropy loss.
@@ -21,7 +22,14 @@ def cross_entropy(y, pred, eps=1e-15):
     """
     n = y.shape[0]
     pred = np.clip(pred, eps, 1 - eps)
-    return - ((y.T @ np.log(pred)) + ((np.ones(y.shape)-y).T @ np.log(np.ones(pred.shape) - pred)))/ n
+    return (
+        -(
+            (y.T @ np.log(pred))
+            + ((np.ones(y.shape) - y).T @ np.log(np.ones(pred.shape) - pred))
+        )
+        / n
+    )
+
 
 def cross_entropy_grad(y, tx, pred):
     """Compute the gradient of the cross-entropy loss.
@@ -33,7 +41,7 @@ def cross_entropy_grad(y, tx, pred):
         np.array: Gradient of the cross-entropy loss
     """
     n = y.shape[0]
-    return tx.T @ (pred - y)/ n
+    return tx.T @ (pred - y) / n
 
 
 def _mse_loss(y, tx, w):
@@ -52,9 +60,9 @@ def least_squares(y, tx):
     Returns:
         (w, loss): Optimal weights, shape (D,), and full-data MSE loss.
     """
-    lhs_matrix  = tx.T @ tx
+    lhs_matrix = tx.T @ tx
     rhs = tx.T @ y
-    w = np.linalg.solve(lhs_matrix , rhs)
+    w = np.linalg.solve(lhs_matrix, rhs)
 
     return w, _mse_loss(y, tx, w)
 
@@ -76,11 +84,12 @@ def ridge_regression(y, tx, lambda_):
     """
     n_samples, n_features = tx.shape
     lambda_prime = 2 * n_samples * lambda_
-    lhs_matrix  = tx.T @ tx + lambda_prime * np.eye(n_features)
+    lhs_matrix = tx.T @ tx + lambda_prime * np.eye(n_features)
     rhs = tx.T @ y
-    w = np.linalg.solve(lhs_matrix , rhs)
+    w = np.linalg.solve(lhs_matrix, rhs)
 
     return w, _mse_loss(y, tx, w)
+
 
 def mean_squared_error_gd(y, tx, initial_w, max_iters, gamma):
     """Linear regression via full-batch gradient descent.
@@ -134,6 +143,7 @@ def mean_squared_error_sgd(y, tx, initial_w, max_iters, gamma):
 
     return w, _mse_loss(y, tx, w)
 
+
 def logistic_regression(y, tx, initial_w, max_iters, gamma):
     """Logistic regression using gradient descent.
 
@@ -155,6 +165,7 @@ def logistic_regression(y, tx, initial_w, max_iters, gamma):
     loss = cross_entropy(y, sigmoid(tx @ w))
     return w, loss
 
+
 def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     """Regularized logistic regression using gradient descent.
 
@@ -174,7 +185,6 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     for i in range(max_iters):
         pred = sigmoid(tx @ w)
         w = w - gamma * (cross_entropy_grad(y, tx, pred) + 2 * lambda_ * w)
-        
+
     loss = cross_entropy(y, sigmoid(tx @ w))
     return w, loss
-

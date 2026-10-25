@@ -1,12 +1,4 @@
 data/dataset/
-__pycache__/data_preprocessing.cpython-313.pyc
-__pycache__/helpers.cpython-310.pyc
-__pycache__/helpers.cpython-313.pyc
-__pycache__/implementations.cpython-313.pyc
-__pycache__/visualizations.cpython-313.pyc
+__pycache__/
+*.pyc
 
-code/__pycache__/data_preprocessing.cpython-313.pyc
-code/__pycache__/helpers.cpython-310.pyc
-code/__pycache__/helpers.cpython-313.pyc
-code/__pycache__/implementations.cpython-313.pyc
-code/__pycache__/visualizations.cpython-313.pyc

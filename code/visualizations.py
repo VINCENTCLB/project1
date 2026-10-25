@@ -3,17 +3,26 @@ import numpy as np
 
 
 def plot_validation_results(trials, output_path):
-    """Save development F1 versus ridge lambda for each preprocessing method."""
+    """Save development F1 versus ridge lambda for each preprocessing method.
+
+    Several class weights are tried per lambda, so each point shows the best
+    development F1 reached at that lambda.
+    """
     fig, ax = plt.subplots(figsize=(7, 4))
     for method in sorted({trial["preprocessing"] for trial in trials}):
-        selected = sorted(
-            (trial for trial in trials if trial["preprocessing"] == method),
-            key=lambda trial: trial["lambda"],
-        )
+        best_per_lambda = {}
+        for trial in trials:
+            if trial["preprocessing"] != method:
+                continue
+            key = trial["lambda"]
+            score = trial["development"]["f1"]
+            best_per_lambda[key] = max(best_per_lambda.get(key, 0.0), score)
+        lambdas = sorted(best_per_lambda)
         ax.plot(
-            [trial["lambda"] for trial in selected],
-            [trial["development"]["f1"] for trial in selected],
-            marker="o", label=method,
+            lambdas,
+            [best_per_lambda[value] for value in lambdas],
+            marker="o",
+            label=method,
         )
     ax.set_xscale("log")
     ax.set_xlabel("Ridge lambda")
@@ -24,6 +33,7 @@ def plot_validation_results(trials, output_path):
     fig.tight_layout()
     fig.savefig(output_path, dpi=160)
     plt.close(fig)
+
 
 def plot_feature_distribution(feature_values, feature_name):
     """
@@ -36,12 +46,14 @@ def plot_feature_distribution(feature_values, feature_name):
     plt.figure(figsize=(10, 6))
     plt.hist(feature_values, bins=30, alpha=0.7)
     plt.xlabel(feature_name)
-    plt.ylabel('Frequency')
-    plt.title(f'Distribution of {feature_name}')
+    plt.ylabel("Frequency")
+    plt.title(f"Distribution of {feature_name}")
     plt.show()
-    
 
-def plot_statistics(mean, std, min_val, max_val, median_val, feature_names, log_scale=False):
+
+def plot_statistics(
+    mean, std, min_val, max_val, median_val, feature_names, log_scale=False
+):
     """Plots summary statistics as clean range intervals (Min-Max, Mean ± Std,
 
     Median).
@@ -77,7 +89,6 @@ def plot_statistics(mean, std, min_val, max_val, median_val, feature_names, log_
         label="Mean ± Std",
     )
 
- 
     ax.plot(
         mean,
         y_indices,
@@ -109,7 +120,8 @@ def plot_statistics(mean, std, min_val, max_val, median_val, feature_names, log_
 
     plt.tight_layout()
     plt.show()
-    
+
+
 def plot_correlation_matrix(corr_matrix, feature_names):
     """
     Plots the correlation matrix as a heatmap.
@@ -119,13 +131,14 @@ def plot_correlation_matrix(corr_matrix, feature_names):
         feature_names (list): List of feature names
     """
     plt.figure(figsize=(10, 8))
-    plt.imshow(corr_matrix, cmap='coolwarm', aspect='auto')
+    plt.imshow(corr_matrix, cmap="coolwarm", aspect="auto")
     plt.colorbar()
-    plt.xticks(range(len(feature_names)), feature_names, rotation=45, ha='right')
+    plt.xticks(range(len(feature_names)), feature_names, rotation=45, ha="right")
     plt.yticks(range(len(feature_names)), feature_names)
-    plt.title('Correlation Matrix')
+    plt.title("Correlation Matrix")
     plt.show()
-    
+
+
 def plot_target_distribution(distribution):
     """
     Plots the distribution of the target variable.
@@ -135,11 +148,12 @@ def plot_target_distribution(distribution):
     """
     plt.figure(figsize=(10, 6))
     plt.bar(distribution.keys(), distribution.values())
-    plt.xlabel('Target Values')
-    plt.ylabel('Counts')
-    plt.title('Target Variable Distribution')
+    plt.xlabel("Target Values")
+    plt.ylabel("Counts")
+    plt.title("Target Variable Distribution")
     plt.show()
-    
+
+
 def plot_loss_curve(losses):
     """
     Plots the loss curve over iterations.
@@ -148,9 +162,9 @@ def plot_loss_curve(losses):
         losses (list): List of loss values over iterations
     """
     plt.figure(figsize=(10, 6))
-    plt.plot(losses, label='Loss')
-    plt.xlabel('Iterations')
-    plt.ylabel('Loss')
-    plt.title('Loss Curve')
+    plt.plot(losses, label="Loss")
+    plt.xlabel("Iterations")
+    plt.ylabel("Loss")
+    plt.title("Loss Curve")
     plt.legend()
     plt.show()

@@ -1,8 +1,16 @@
 from helpers import *
+from data_cache import load_csv_data_cached, load_feature_names
+import project_root  # noqa: F401  (puts the repository root on sys.path)
 from implementations import *
 from visualizations import *
 import data_preprocessing as data_processing
-from model_experiments import LAMBDAS, SEED, make_test_predictions, run_experiments
+from model_experiments import (
+    LAMBDAS,
+    POS_WEIGHTS,
+    SEED,
+    make_test_predictions,
+    run_experiments,
+)
 from pathlib import Path
 import argparse
 import json
@@ -17,33 +25,138 @@ def parse_args():
     )
 
     # Data directory argument with default value.
-    parser.add_argument("--data-path", type=Path, default=Path(__file__).resolve().parents[1] / "data/dataset")
+    parser.add_argument(
+        "--data-path",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "data/dataset",
+    )
 
     # Subsample to test the pipeline with a smaller dataset.
-    parser.add_argument("--subsample", action="store_true", help="Subsample the dataset for testing purposes.")
+    parser.add_argument(
+        "--subsample",
+        action="store_true",
+        help="Subsample the dataset for testing purposes.",
+    )
+
+    # Parsed arrays are cached as .npy next to the data; this forces a reparse.
+    parser.add_argument(
+        "--no-cache",
+        dest="cache",
+        action="store_false",
+        help="Reparse the CSVs instead of using the .npy cache.",
+    )
 
     # Compare evaluates standardize and all on development data.
-    parser.add_argument("--preprocessing", type=str, default="standardize", choices=["standardize", "best_features", "all", "none", "compare"], help="Preprocessing option; compare tests standardize and all.")
+    parser.add_argument(
+        "--preprocessing",
+        type=str,
+        default="standardize",
+        choices=["standardize", "best_features", "all", "none", "clean", "compare"],
+        help="Preprocessing option; compare tests standardize, all and clean.",
+    )
 
     # Polynomial degree argument with default value.
-    parser.add_argument("-d", "--degree", type=int, default=1, help="Polynomial feature expansion degree.")
+    parser.add_argument(
+        "-d",
+        "--degree",
+        type=int,
+        default=1,
+        help="Polynomial feature expansion degree.",
+    )
 
     # Retained for compatibility with the original CLI; ridge has a closed-form solution.
-    parser.add_argument("-lr", type=float, default=0.01, help="Reserved for gradient-based models; unused by ridge regression.")
+    parser.add_argument(
+        "-lr",
+        type=float,
+        default=0.01,
+        help="Reserved for gradient-based models; unused by ridge regression.",
+    )
 
     # Output a submission CSV file for the predictions for the full test set.
-    parser.add_argument("--submission", action="store_true", help="Refit on all labeled data and create a local prediction CSV.")
-    parser.add_argument("--lambdas", type=float, nargs="+", default=list(LAMBDAS), help="Ridge regularization values to test.")
-    parser.add_argument("--seed", type=int, default=SEED, help="Seed for the stratified data split.")
-    parser.add_argument("--plots", action="store_true", help="Save a development F1 plot.")
-    parser.add_argument("--show-statistics", action="store_true", help="Display the original training/test statistics plots after model selection.")
-    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parents[1] / "data/dataset/integrated_results", help="Local directory for metrics, plots, and predictions.")
+    parser.add_argument(
+        "--submission",
+        action="store_true",
+        help="Refit on all labeled data and create a local prediction CSV.",
+    )
+    parser.add_argument(
+        "--lambdas",
+        type=float,
+        nargs="+",
+        default=list(LAMBDAS),
+        help="Ridge regularization values to test.",
+    )
+    parser.add_argument(
+        "--pos-weights",
+        type=float,
+        nargs="+",
+        default=list(POS_WEIGHTS),
+        help="Positive-class weights to test; counteracts the 91/9 imbalance.",
+    )
+
+    # Options for the "clean" preprocessing path only.
+    parser.add_argument(
+        "--one-hot-top-k",
+        type=int,
+        default=None,
+        help="One-hot encode this many low-cardinality columns (clean only).",
+    )
+    parser.add_argument(
+        "--interactions-top-k",
+        type=int,
+        default=None,
+        help="Build pairwise products among this many strongest features (clean only).",
+    )
+    parser.add_argument(
+        "--clip",
+        action="store_true",
+        help="Clip outliers to train percentile bounds (clean only).",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=SEED, help="Seed for the stratified data split."
+    )
+    parser.add_argument(
+        "--folds",
+        type=int,
+        default=1,
+        help=(
+            "Select settings by this many cross-validation folds over the "
+            "non-holdout rows. 1 keeps the single development split."
+        ),
+    )
+    parser.add_argument(
+        "--plots", action="store_true", help="Save a development F1 plot."
+    )
+    parser.add_argument(
+        "--show-statistics",
+        action="store_true",
+        help="Display the original training/test statistics plots after model selection.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "data/dataset/integrated_results",
+        help="Local directory for metrics, plots, and predictions.",
+    )
     return parser.parse_args()
 
 
-def run_pipeline(data_path: str, subsample: bool, degree: int, lr: float,
-                 submission: bool, preprocessing: str, lambdas=LAMBDAS,
-                 seed=SEED, plots=False, show_statistics=False, output_dir=None):
+def run_pipeline(
+    data_path: str,
+    subsample: bool,
+    degree: int,
+    lr: float,
+    submission: bool,
+    preprocessing: str,
+    lambdas=LAMBDAS,
+    seed=SEED,
+    plots=False,
+    show_statistics=False,
+    output_dir=None,
+    use_cache=True,
+    pos_weights=POS_WEIGHTS,
+    clean_options=None,
+    folds=1,
+):
     """Core application logic separated from CLI parsing.
 
     The lr argument is retained for compatibility; the ridge solver does not use it.
@@ -52,23 +165,43 @@ def run_pipeline(data_path: str, subsample: bool, degree: int, lr: float,
         raise ValueError("Disable --subsample before generating a complete submission")
 
     time_start_loading = time.time()
-    print("Loading CSVs with the course helper...")
-    X_tr, X_te, Y_tr, train_ids, test_ids = load_csv_data(data_path, sub_sample=subsample)
+    X_tr, X_te, Y_tr, train_ids, test_ids = load_csv_data_cached(
+        data_path, sub_sample=subsample, use_cache=use_cache
+    )
     time_end_loading = time.time()
-    print(f"Time taken to load data: {time_end_loading - time_start_loading:.2f} seconds")
+    print(
+        f"Time taken to load data: {time_end_loading - time_start_loading:.2f} seconds"
+    )
     print(f"Features: train={X_tr.shape}, test={X_te.shape}")
+
+    # Column names are needed to drop administrative fields by name; the raw
+    # arrays carry no header, so read it from the CSV directly.
+    try:
+        feature_names = load_feature_names(data_path)
+    except OSError:
+        feature_names = None
 
     # Kora model training: split RAW data before fitting preprocessing.
     # run_experiments calls data_processing.pipeline on training/development
     # portions, then evaluates the selected configuration on the holdout.
     results = run_experiments(
-        X_tr, Y_tr, preprocessing=preprocessing, degree=degree,
-        lambdas=lambdas, seed=seed,
+        X_tr,
+        Y_tr,
+        preprocessing=preprocessing,
+        degree=degree,
+        lambdas=lambdas,
+        seed=seed,
+        pos_weights=pos_weights,
+        feature_names=feature_names,
+        clean_options=clean_options,
+        folds=folds,
     )
     results["subsample"] = subsample
 
     if output_dir is None:
-        output_dir = Path(__file__).resolve().parents[1] / "data/dataset/integrated_results"
+        output_dir = (
+            Path(__file__).resolve().parents[1] / "data/dataset/integrated_results"
+        )
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -86,23 +219,56 @@ def run_pipeline(data_path: str, subsample: bool, degree: int, lr: float,
     if show_statistics:
         time_start_preprocessing = time.time()
         x_train, x_test = data_processing.pipeline(
-            X_tr, Y_tr, X_te,
-            method=results["selected"]["preprocessing"], degree=degree,
+            X_tr,
+            Y_tr,
+            X_te,
+            method=results["selected"]["preprocessing"],
+            degree=degree,
+            feature_names=feature_names,
+            clean_options=clean_options,
         )
         time_end_preprocessing = time.time()
-        print(f"Time taken for statistics preprocessing: {time_end_preprocessing - time_start_preprocessing:.2f} seconds")
+        print(
+            f"Time taken for statistics preprocessing: {time_end_preprocessing - time_start_preprocessing:.2f} seconds"
+        )
 
         mean, std, min_val, max_val, median_val = data_processing.statistics(x_train)
-        mean_test, std_test, min_val_test, max_val_test, median_val_test = data_processing.statistics(x_test)
+        (
+            mean_test,
+            std_test,
+            min_val_test,
+            max_val_test,
+            median_val_test,
+        ) = data_processing.statistics(x_test)
         print("Training set statistics for the first 10 features:")
-        plot_statistics(mean[:10], std[:10], min_val[:10], max_val[:10], median_val[:10], [f"Feature {i}" for i in range(x_train.shape[1])][:10])
+        plot_statistics(
+            mean[:10],
+            std[:10],
+            min_val[:10],
+            max_val[:10],
+            median_val[:10],
+            [f"Feature {i}" for i in range(x_train.shape[1])][:10],
+        )
         print("Test set statistics for the first 10 features:")
-        plot_statistics(mean_test[:10], std_test[:10], min_val_test[:10], max_val_test[:10], median_val_test[:10], [f"Feature {i}" for i in range(x_test.shape[1])][:10])
+        plot_statistics(
+            mean_test[:10],
+            std_test[:10],
+            min_val_test[:10],
+            max_val_test[:10],
+            median_val_test[:10],
+            [f"Feature {i}" for i in range(x_test.shape[1])][:10],
+        )
         del x_train, x_test
 
     if submission:
         print("Refitting the selected configuration on all labeled rows...")
-        predictions = make_test_predictions(X_tr, Y_tr, X_te, results)
+        predictions = make_test_predictions(
+            X_tr,
+            Y_tr,
+            X_te,
+            results,
+            feature_names=feature_names,
+        )
         if len(predictions) != len(test_ids):
             raise ValueError("Prediction count does not match test IDs")
         submission_path = output_dir / "submission.csv"
@@ -116,11 +282,31 @@ def run_pipeline(data_path: str, subsample: bool, degree: int, lr: float,
 def main():
     """Program entry point."""
     args = parse_args()
+    clean_options = {
+        name: value
+        for name, value in (
+            ("one_hot_top_k", args.one_hot_top_k),
+            ("interactions_top_k", args.interactions_top_k),
+            ("clip", args.clip or None),
+        )
+        if value is not None
+    }
     run_pipeline(
-        data_path=args.data_path, subsample=args.subsample, degree=args.degree,
-        lr=args.lr, submission=args.submission, preprocessing=args.preprocessing,
-        lambdas=args.lambdas, seed=args.seed, plots=args.plots,
-        show_statistics=args.show_statistics, output_dir=args.output_dir,
+        data_path=args.data_path,
+        subsample=args.subsample,
+        degree=args.degree,
+        lr=args.lr,
+        submission=args.submission,
+        preprocessing=args.preprocessing,
+        lambdas=args.lambdas,
+        seed=args.seed,
+        plots=args.plots,
+        show_statistics=args.show_statistics,
+        output_dir=args.output_dir,
+        use_cache=args.cache,
+        pos_weights=args.pos_weights,
+        folds=args.folds,
+        clean_options=clean_options,
     )
 
 
