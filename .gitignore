@@ -2,3 +2,11 @@ data/dataset/
 __pycache__/
 *.pyc
 
+report/missfont.log
+report/report.aux
+report/report.fdb_latexmk
+report/report.fls
+report/report.log
+report/report.out
+report/report.synctex.gz
+report/report.out
