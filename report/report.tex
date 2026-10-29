@@ -113,42 +113,74 @@ $\gamma\in\{0.05,0.2,1,4,16\}$ and up to $4{,}000$ iterations.
 \section{Results}
 \label{sec:results}
 
-% ---------------------------------------------------------------------------
-% TO BE WRITTEN. Suggested contents, in order:
-%   1. Baseline vs. selected model on the sealed holdout (accuracy,
-%      precision, recall, F1). Note that accuracy below the 0.9117 majority
-%      baseline is expected and correct here.
-%   2. The cumulative ablation table (E0-E4) with the delta per stage.
-%   3. The lambda x w_+ grid, as a table or as the validation_f1.png figure
-%      that run.py writes to data/dataset/integrated_results/.
-%   4. Paired 5-fold verdicts on the contested design decisions
-%      (mean difference, t statistic, folds won).
-%   5. Ridge vs. regularised logistic regression.
-%   6. The competition score on the held-back test set.
-%
-% Skeletons to fill in:
-%
-% \begin{table}[tbp]
-%   \centering
-%   \begin{tabular}[c]{|l|r|r|r|r|}
-%     \hline
-%     Model & Accuracy & Precision & Recall & F1 \\
-%     \hline
-%     Always predict $-1$ & & & & \\
-%     Selected ridge      & & & & \\
-%     \hline
-%   \end{tabular}
-%   \caption{Holdout performance against the majority baseline.}
-%   \label{tab:holdout}
-% \end{table}
-%
-% \begin{figure}[tbp]
-%   \centering
-%   \includegraphics[width=\columnwidth]{validation_f1}
-%   \caption{Development F1 against ridge $\lambda$, per preprocessing method.}
-%   \label{fig:validation-f1}
-% \end{figure}
-% ---------------------------------------------------------------------------
+\textit{Holdout performance.}
+For the single-split selection (\texttt{clean}, $\lambda=10^{-3}$,
+$w_{+}=7$), ridge achieved F1 $0.4311$ on the sealed holdout
+(Table~\ref{tab:holdout}). It recovered $53.93\%$ of positive cases,
+whereas the majority baseline found none despite its higher accuracy.
+
+\begin{table}[tbp]
+  \centering
+  \caption{Positive-class performance on the sealed holdout.}
+  \label{tab:holdout}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lrrrr}
+    \hline
+    Model & Accuracy & Precision & Recall & F1 \\
+    \hline
+    Always $-1$ & 0.9117 & 0.0000 & 0.0000 & 0.0000 \\
+    Selected ridge & 0.8743 & 0.3591 & 0.5393 & 0.4311 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\textit{Preprocessing ablation.}
+Development F1 rose from $0.4089$ to $0.4318$ across the cumulative
+stages in Table~\ref{tab:ablation}. Sentinel decoding produced the
+largest individual increase ($+0.0109$); removing administrative
+columns alone slightly reduced F1.
+
+\begin{table}[tbp]
+  \centering
+  \caption{Cumulative preprocessing ablation on development data.
+  Deltas are relative to the preceding row.}
+  \label{tab:ablation}
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrr}
+    \hline
+    Stage & F1 & $\Delta$F1 \\
+    \hline
+    E0: median imputation + scaling & 0.4089 & --- \\
+    E1: + remove administrative columns & 0.4079 & $-0.0010$ \\
+    E2: + sentinel decoding & 0.4188 & $+0.0109$ \\
+    E3: + missingness indicators & 0.4225 & $+0.0037$ \\
+    E4: + remaining feature construction & 0.4318 & $+0.0093$ \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\textit{Parameter and model comparisons.}
+Joint cross-validated tuning gave a best mean F1 of $0.4384$ at
+$\lambda=10^{-4}$ and $w_{+}=3$. Nearby settings formed a broad plateau:
+the top five combinations differed by at most $0.0004$, below the
+fold standard deviation of about $0.0034$.
+Paired five-fold comparisons favoured clipping ($t=2.79$), but not
+increasing interactions from $20$ to $30$ ($\Delta\mathrm{F1}=-0.0006$,
+$t=-0.93$, one fold won) or one-hot width from $15$ to $40$
+($-0.0001$, $t=-0.39$, two folds won). Excluding binary columns,
+curated nominal encoding and bagging also gave no consistent gain.
+On the same development split and feature matrix, ridge reached
+$0.4389$, versus $0.4317$ for the best measured logistic run
+($\gamma=0.2$, $4{,}000$ iterations), a gap of $0.0072$.
+
+\textit{Competition results.}
+The recorded competition F1 increased from $0.419$ for the first
+submission to $0.448$ for the improved full-data refit. This external
+test score and the local holdout score measure different fitted models
+on different rows and should not be directly equated.
+
 
 \section{Discussion and Summary}
 \label{sec:discussion}
